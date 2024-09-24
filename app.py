@@ -36,17 +36,17 @@ with st.sidebar:
 
 if st.session_state.hf_api_key:
     if validate_hf_key(st.session_state.hf_api_key):
-        try:
-            if groq_api_key:
-                try:
+        if groq_api_key:
+            try:
+                with st.spinner("Processing"):
                     os.environ["HF_TOKEN"] = st.session_state.hf_api_key  
                     embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-                
+                    
                     llm = ChatGroq(groq_api_key=st.session_state.groq_api_key,  model="Gemma2-9b-It")
-                            
+                                
                     if "session" not in st.session_state:
                         st.session_state.store = {}
-                    
+                        
                     uploaded_file = st.file_uploader("Upload your PDF file(s) here to extract text. You can upload multiple files at once.", type="pdf", accept_multiple_files=True)
                     if uploaded_file:
                         documents = []
@@ -55,16 +55,16 @@ if st.session_state.hf_api_key:
                             with open(temp_pdf, "wb") as f:
                                 f.write(uploaded_file.getvalue())
                                 file_name = uploaded_file.name
-                                    
+                                        
                             loader = PyPDFLoader(temp_pdf)
                             doc = loader.load()
                             documents.extend(doc)
-                                    
+                                        
                         text_splitter = RecursiveCharacterTextSplitter(chunk_size=5000, chunk_overlap=500)
                         chunks = text_splitter.split_documents(documents)
                         vector_store = FAISS.from_documents(chunks, embeddings)
                         retriever = vector_store.as_retriever()
-                                
+                                    
                         contextualize_system_prompt = """
                         Given a chat history and the latest user question which might 
                         reference context in the chat histry, formulate a standalone question
@@ -78,16 +78,16 @@ if st.session_state.hf_api_key:
                                 ("human", "{input}")
                             ]
                         )
-                                
+                                    
                         history_aware_retriever = create_history_aware_retriever(llm, retriever, contextualize_question_prompt)
-                                
+                                    
                         system_prompt = """You are a question-answering assistant.
                         Answer the questions only using the context provided. If 
                         you don't know the answer say that you don't know the answer and
                         ask if they have any other question. Answer concise using 4 sentences max.
                         \n\n
                         {context}"""
-                                
+                                    
                         prompt = ChatPromptTemplate(
                             [
                                 ("system", system_prompt),
@@ -95,15 +95,15 @@ if st.session_state.hf_api_key:
                                 ("human", "{input}"),
                             ]
                         )
-                                
+                                    
                         qa_chain = create_stuff_documents_chain(llm, prompt)
                         rag_chain = create_retrieval_chain(history_aware_retriever, qa_chain)
-                                
+                                    
                         def get_session_history(session_id:str)-> BaseChatMessageHistory:
                             if session_id not in st.session_state.store:
                                 st.session_state.store[session_id] = ChatMessageHistory()
                             return st.session_state.store[session_id]
-                                
+                                    
                         conversational_rag_chain = RunnableWithMessageHistory(
                             rag_chain,
                             get_session_history,
@@ -111,8 +111,8 @@ if st.session_state.hf_api_key:
                             history_messages_key='chat_history',
                             output_messages_key='answer'
                         )
-                                
-                                
+                                    
+                                    
                         user_input = st.text_input("Ask a question")
                         if user_input:
                             if not groq_api_key.strip():
@@ -123,18 +123,16 @@ if st.session_state.hf_api_key:
                                     {'input': user_input},
                                     config = {"configurable": {"session_id": session_id}}
                                 )
-                                        
-                            st.write("Assistant's response:", output['answer'])
-                except Exception as e:
-                    st.error("Invalid GroQ API Key. Please enter it again.")
-            else:
-                st.write("Please enter your GroQ API Key")        
-        except Exception as e:
-            st.error(f"Error occurred: {str(e)}")
+                                                
+                                st.write("Assistant's response:", output['answer'])
+            except Exception as e:
+                st.error("Invalid GroQ API Key. Please enter it again.")
+        else:
+            st.info("Please enter your GroQ API Key")        
     else:
         st.error("Invalid Huggingface API key. Please enter it again.")
         st.session_state.hf_api_key = ""  
 else:
-    st.write("Please enter your Huggingface API Key to begin using the RAG system.")
+    st.info("Please enter your Huggingface API Key to begin using the RAG system.")
 
     
